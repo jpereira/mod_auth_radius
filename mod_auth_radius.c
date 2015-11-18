@@ -1425,11 +1425,45 @@ static const authn_provider radius_authentication_provider = {
 	NULL
 };
 
+typedef struct {
+  const char *attr;
+  uint8_t code;
+  char **ptr;
+} attribute_map_t;
+
+static int lookup_headers_to_avp(request_rec *r)
+{
+  radius_dir_config_rec_t *rec = ap_get_module_config(r->per_dir_config, &radius_auth_module);
+  attribute_map_t *m;
+  attribute_map_t attrs_map[] = {
+    { "X-RADIUS-Calling-Station-Id", 10, &rec->calling_station_id },
+    { "X-RADIUS-Called-Station-Id", 11, NULL },
+    { NULL, 0 }
+  };
+
+  for (m = &attrs_map[0]; m->attr != NULL; m++) {
+    const char *val = apr_table_get(r->headers_in, m->attr);   
+
+    if (val) {
+      if (rec->debug_mode) RADLOG_DEBUG(r->server, "Found the header %s=\"%s\"", m->attr, val);
+
+      if (m->ptr) {
+        RADLOG_DEBUG(r->server, "current value = %s", *m->ptr);
+        *m->ptr = apr_pstrdup(r->pool, val);
+      }
+    }
+  }
+
+  return OK;
+}
+
 static void register_hooks(apr_pool_t *p)
 {
 	static const char *const aszPost[] = { "mod_authz_user.c", NULL };
 
 	ap_register_provider(p, AUTHN_PROVIDER_GROUP, "radius", "0", &radius_authentication_provider);
+
+  ap_hook_header_parser(lookup_headers_to_avp, NULL, NULL, APR_HOOK_MIDDLE);
 
 #ifdef AP_AUTH_INTERNAL_PER_CONF
 	ap_hook_check_access(basic_auth,
