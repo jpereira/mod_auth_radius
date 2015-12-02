@@ -5,5 +5,15 @@
 .libs/
 *.so
 *.o
+*~
+Makefile
 CMakeLists.txt
 .idea
+autom4te.cache/
+config.h.in
+configure
+ltmain.sh
+config.h
+config.log
+config.status
+
