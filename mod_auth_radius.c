@@ -48,6 +48,8 @@
  * For more information on the Apache Group and the Apache HTTP server
  * project, please see <http://www.apache.org/>.
  */
+//RCSID("$Id$")
+
 #include <stdint.h>
 #include <netdb.h>
 #include <sys/stat.h>
@@ -69,6 +71,23 @@
 #include "ap_provider.h"
 #include "mod_auth.h"
 #include "http_request.h"
+
+#include "config.h"
+
+#if 1
+#include <freeradius/libradius.h>
+#include <freeradius/conf.h>
+#include <freeradius/radpaths.h>
+#endif
+
+static const char *mod_auth_radius_version = "mod_auth_radius" /* e.g: mod_auth_radius/<version>[-git-<crc>] */
+#ifdef MOD_RADIUS_VERSION
+	"/"MOD_RADIUS_VERSION
+#endif
+#ifdef MOD_RADIUS_VERSION_COMMIT
+	"-git"MOD_RADIUS_VERSION_COMMIT
+#endif
+;
 
 #if AP_SERVER_MAJORVERSION_NUMBER >= 2 && AP_SERVER_MINORVERSION_NUMBER >= 4
   #define client_ip_get(_r) (_r->useragent_ip)
@@ -1179,29 +1198,36 @@ static const authn_provider radius_authentication_provider = {
 	NULL
 };
 
+static char		const *radius_dir = RADDBDIR;
+static char		const *dict_dir = DICTDIR;
+
 /*
  * Registering the version of mod_auth_radius
- *
- * e.g:
- *
- * [jpereira@jpereira-desktop mod_auth_radius.git]$ curl -v http://localhost 2>&1 | grep "Server:"
- * < Server: Apache/2.4.17 mod_auth_radius/1.6.1
- * [jpereira@jpereira-desktop mod_auth_radius.git]$
  */
 static int radius_hook_init(apr_pool_t *pconf,
                             apr_pool_t *mp_log,
                             apr_pool_t *mp_temp,
                             server_rec *s) {
-	char package[48]; /* e.g: mod_auth_radius/<version>[-git-<crc>] */
-
 	/* Setup module version information. */
-#ifdef MOD_RADIUS_AUTH_VERSION_STRING
-	snprintf(package, sizeof(package), "mod_auth_radius/%s", MOD_RADIUS_AUTH_VERSION_STRING);
-#else
-	strcpy(package, "mod_auth_radius");
-#endif
+	ap_add_version_component(pconf, mod_auth_radius_version);
 
-	ap_add_version_component(pconf, package);
+	/*
+	 *	Mismatch between the binary and the libraries it depends on
+	 */
+	if (fr_check_lib_magic(RADIUSD_MAGIC_NUMBER) < 0) {
+		fr_perror("radclient");
+		return 1;
+	}
+
+	if (dict_init(dict_dir, RADIUS_DICTIONARY) < 0) {
+		fr_perror("radclient");
+		return 1;
+	}
+
+	if (dict_read(radius_dir, RADIUS_DICTIONARY) == -1) {
+		fr_perror("radclient");
+		return 1;
+	}
 
 	return OK;
 }

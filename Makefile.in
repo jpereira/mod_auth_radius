@@ -1,0 +1,75 @@
+######################################################################
+#
+#  A non-minimal 'Makefile', by Jorge Pereira <jpereiran@gmail.com>
+#
+#  $Id$
+#
+######################################################################
+
+######################################################################
+#
+#   Version
+#
+APXS=@APXS@
+CFLAGS=@CFLAGS@
+CPPFLAGS=@CPPFLAGS@
+LDFLAGS=@LDFLAGS@
+LIBS=@LIBS@
+TLS=@TLS@
+ACTIVATE=@ACTIVATE@
+TARGET=.libs/mod_auth_radius.so
+
+all: $(TARGET)
+
+$(TARGET): Makefile mod_auth_radius.c
+	$(APXS) -c $(CPPFLAGS) $(LDFLAGS) $(LIBS) mod_auth_radius.c
+
+install: $(TARGET)
+	$(APXS) -in auth_radius $(ACTIVATE) $(TARGET)
+
+clean:
+	rm -rf *.lo *.la *.slo *.so *.o .libs/ *~ core
+
+distclean: clean
+	rm -rf Makefile config.status config.cache config.log config.h autom4te.cache/
+
+configure: configure.ac
+	autoconf
+
+config.status: configure
+	./config.status --recheck
+
+config.h.in: configure.ac
+	autoheader
+
+config.h: config.h.in config.status
+	./config.status
+
+Makefile: Makefile.in config.status
+	./config.status
+
+######################################################################
+#
+#  Check a distribution out of the source tree, and make a tar file.
+#
+dist:
+	tar -cf mod_auth_radius-${MOD_RADIUS_VERSION}.tar mod_auth_radius-${MOD_RADIUS_VERSION}
+	rm -rf mod_auth_radius-${MOD_RADIUS_VERSION}
+
+######################################################################
+#
+#   Debian package.
+#
+
+# high-level targets
+.PHONY: dist-check
+dist-check: debian/changelog
+	@if [ "`head -n 1 debian/changelog | sed 's/.*(//; s/).*$$//g'`" != "$(MOD_RADIUS_VERSION)" ]; then \
+		echo debian/changelog needs to be updated; \
+		exit 1; \
+	fi
+
+.PHONY: deb
+deb:
+	fakeroot dpkg-buildpackage -b -uc
+
